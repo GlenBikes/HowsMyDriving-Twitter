@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "lib": ["esnext"],
+    "module": "commonjs",
+    "target": "es5",
+    "moduleResolution": "node",
+    "declaration": true,
+    "rootDir": ".",
+    "outDir": "dist",
+    "preserveSymlinks": true,
+    "downlevelIteration": true,
+    "types" : ["node", "mocha"]
+  },
+  "include": [
+    "index.ts",
+    "src/**/*.ts",
+    "test/**/*.ts"  
+  ],
+  "exclude": [
+    "node_modules",
+    "log/**"
+  ]
+}
