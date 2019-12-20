@@ -1,17 +1,16 @@
 {
-  "name": "HowsMyDriving-Twitter",
-  "version": "0.1.0",
+  "name": "howsmydriving-twitter",
+  "version": "0.1.15",
   "description": "Twitter abstraction for @HowsMyDrivingWA.",
-  "main": "./dist/index.js",
+  "main": "dist/index.js",
   "types": "definitions/index.d.ts",
   "typescript": {
     "definition": "definitions/index"
   },
   "dependencies": {
-    "app-root-dir": "^1.0.2",
     "chokidar": "^3.3.0",
-    "howsmydriving-utils": "^0.1.57",
-
+    "file-system": "^2.2.2",
+    "howsmydriving-utils": "^0.1.69",
     "live-mutex": "^0.2.21",
     "log4js": "^4.0.2",
     "soap": "^0.30.0",
@@ -30,6 +29,7 @@
     "gulp-mocha": "^7.0.2",
     "gulp-prettier": "^2.3.0",
     "gulp-typescript": "^6.0.0-alpha.1",
+    "merge2": "^1.3.0",
     "mocha": "^6.2.2",
     "mocha-typescript": "^1.1.17",
     "prettier": "^1.19.1",

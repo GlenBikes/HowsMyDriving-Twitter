@@ -1,7 +1,6 @@
 .aws/**
-definitions/**
 dist/**
+definitions/**
 log/**
 .localstore/**
-node_modules/**
 .v8*
