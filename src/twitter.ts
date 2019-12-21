@@ -54,7 +54,11 @@ const MUTEX_KEY: { [index: string]: string } = {
   dm_reading: '__HOWSMYDRIVING_DM_READING__'
 };
 
-var mutex_client = GetMutexClient();
+var mutex_client: Client;
+
+GetMutexClient().then(client => {
+  mutex_client = client;
+});
 
 var bot_app_id: number;
 
