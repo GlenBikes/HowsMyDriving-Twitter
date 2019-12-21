@@ -20,31 +20,23 @@ if (!fs.existsSync(package_config_path)) {
   }
 }
 
-console.log(`Loading ${package_config_path}.`);
-
 var pjson = require(package_config_path);
 
 __MODULE_NAME__ = pjson.name;
 __MODULE_VERSION__ = pjson.version;
 
-console.log(`__MODULE_NAME__: ${__MODULE_NAME__}.`);
-
 const chokidar = require('chokidar'),
   log4js = require('log4js');
 
-console.log(`Loading ${path.resolve(__dirname + '/../config/log4js.json')}.`);
 const config_path = path.resolve(__dirname + '/../config/log4js.json');
 
 // Load the config.
-console.log('Configuring log4js.');
 log4js.configure(config_path);
 
 // Create default logger to log that our module was loaded and for
 // config update changes.
-console.log('Getting logger.');
 export var log = log4js.getLogger('result');
 
-console.log(`Setting 'module' context value to : ${__MODULE_NAME__}.`);
 log.addContext('module', __MODULE_NAME__);
 
 /**

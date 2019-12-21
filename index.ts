@@ -7,6 +7,3 @@ export { GetTweetById } from './src/twitter';
 export { SendTweets } from './src/twitter';
 
 import { log } from './src/logging';
-
-console.log('console.test');
-log.info('Test.');
