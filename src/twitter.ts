@@ -1,6 +1,5 @@
 // Setting things up.
 import * as http from 'http';
-import { LMXClient, LMXBroker, Client } from 'live-mutex';
 import * as Twit from 'twit';
 
 // howsmydriving-utils
@@ -12,7 +11,6 @@ import { ICitation } from 'howsmydriving-utils';
 import { CompareNumericStrings } from 'howsmydriving-utils';
 import { SplitLongLines } from 'howsmydriving-utils';
 import { PrintTweet } from 'howsmydriving-utils';
-import { GetMutexClient } from 'howsmydriving-utils';
 import { sleep } from 'howsmydriving-utils';
 
 import { ITweet, ITwitterUser } from './interfaces';
@@ -20,11 +18,6 @@ import { ITweet, ITwitterUser } from './interfaces';
 // legacy commonjs modules
 const fs = require('fs'),
   soap = require('soap');
-
-// Mutex to ensure we don't have multiple requests processing the same tweets
-const MUTEX_TWIT_POST_MAX_HOLD_MS: number = 100000,
-  MUTEX_TWIT_POST_MAX_RETRIES: number = 5,
-  MUTEX_TWIT_POST_MAX_WAIT_MS: number = 300000;
 
 const INTER_TWEET_DELAY_MS =
   process.env.hasOwnProperty('INTER_TWEET_DELAY_MS') &&
@@ -54,11 +47,15 @@ const MUTEX_KEY: { [index: string]: string } = {
   dm_reading: '__HOWSMYDRIVING_DM_READING__'
 };
 
-var mutex_client: Client;
+//var mutex_client;
 
-GetMutexClient().then(client => {
-  mutex_client = client;
-});
+//GetMutexClient().then(client => {
+//  mutex_client = client;
+//});
+var MutexPromise = require('mutex-promise');
+
+var tweet_mutex = new MutexPromise(MUTEX_KEY['tweet_reading']);
+var dm_mutex = new MutexPromise(MUTEX_KEY['dm_reading']);
 
 var bot_app_id: number;
 
@@ -84,44 +81,28 @@ export function GetNewTweets(last_mention_id: string): Promise<Array<ITweet>> {
   var twitter_promises: Array<Promise<void>> = [];
 
   return new Promise<Array<ITweet>>((resolve, reject) => {
-    // Make sure we are the only process doing this or else we'll get dupes.
-    let acquired_mutex = {
-      key: '',
-      id: ''
-    };
-    mutex_client
-      .acquireLock(MUTEX_KEY['tweet_reading'], {
-        ttl: MUTEX_TWIT_POST_MAX_HOLD_MS,
-        maxRetries: MUTEX_TWIT_POST_MAX_RETRIES,
-        lockRequestTimeout: MUTEX_TWIT_POST_MAX_WAIT_MS
-      })
-      .then(v => {
-        log.debug(`Acquired mutex ${v.id} and received key ${v.key}.`);
-        acquired_mutex.key = v.key;
-        acquired_mutex.id = v.id;
+    log.debug(`Checking for tweets greater than ${last_mention_id}.`);
+    /* Next, let's search for Tweets that mention our bot, starting after the last mention we responded to. */
+    T.get(
+      'search/tweets',
+      {
+        q: '%40' + process.env.TWITTER_HANDLE,
+        since_id: last_mention_id,
+        tweet_mode: 'extended'
+      },
+      function(
+        err: Error,
+        data: Twit.Twitter.SearchResults,
+        response: http.IncomingMessage
+      ) {
+        if (err) {
+          handleError(err);
+        }
 
-        log.debug(`Checking for tweets greater than ${last_mention_id}.`);
-        /* Next, let's search for Tweets that mention our bot, starting after the last mention we responded to. */
-        T.get(
-          'search/tweets',
-          {
-            q: '%40' + process.env.TWITTER_HANDLE,
-            since_id: last_mention_id,
-            tweet_mode: 'extended'
-          },
-          function(
-            err: Error,
-            data: Twit.Twitter.SearchResults,
-            response: http.IncomingMessage
-          ) {
-            if (err) {
-              handleError(err);
-            }
+        var tweets_read: Array<ITweet> = [];
 
-            var tweets_read: Array<ITweet> = [];
-
-            if (data.statuses.length) {
-              /* 
+        if (data.statuses.length) {
+          /* 
                 Iterate over each tweet. 
 
                 The replies can occur concurrently, but the threaded replies to each tweet must, 
@@ -130,70 +111,54 @@ export function GetNewTweets(last_mention_id: string): Promise<Array<ITweet>> {
                 Since each tweet with a mention is processed in parallel, keep track of largest ID
                 and write that at the end.
                 */
-              data.statuses.forEach((status: Twit.Twitter.Status) => {
-                if (CompareNumericStrings(maxTweetIdRead, status.id_str) < 0) {
-                  maxTweetIdRead = status.id_str;
-                }
+          data.statuses.forEach((status: Twit.Twitter.Status) => {
+            if (CompareNumericStrings(maxTweetIdRead, status.id_str) < 0) {
+              maxTweetIdRead = status.id_str;
+            }
 
-                /*
+            /*
                   Make sure this isn't a reply to one of the bot's tweets which would
                   include the bot screen name in full_text, but only due to replies.
                   */
-                const { chomped, chomped_text } = chompTweet(status);
+            const { chomped, chomped_text } = chompTweet(status);
 
-                if (!chomped || botScreenNameRegexp.test(chomped_text)) {
-                  /* Don't reply to retweet or our own tweets. */
-                  if (status.hasOwnProperty('retweet_status')) {
-                    log.info(`Ignoring retweet: ${status.full_text}`);
-                  } else if (status.user.id == bot_app_id) {
-                    log.info('Ignoring our own tweet: ' + status.full_text);
-                  } else {
-                    log.info(`Found ${PrintTweet(status)}`);
+            if (!chomped || botScreenNameRegexp.test(chomped_text)) {
+              /* Don't reply to retweet or our own tweets. */
+              if (status.hasOwnProperty('retweet_status')) {
+                log.info(`Ignoring retweet: ${status.full_text}`);
+              } else if (status.user.id == bot_app_id) {
+                log.info('Ignoring our own tweet: ' + status.full_text);
+              } else {
+                log.info(`Found ${PrintTweet(status)}`);
 
-                    var tweet: ITweet = {
-                      id: status.id,
-                      id_str: status.id_str,
-                      full_text: status.full_text,
-                      user: {
-                        id: status.user.id,
-                        id_str: status.user.id_str,
-                        screen_name: status.user.screen_name
-                      }
-                    };
+                var tweet: ITweet = {
+                  id: status.id,
+                  id_str: status.id_str,
+                  full_text: status.full_text,
+                  user: {
+                    id: status.user.id,
+                    id_str: status.user.id_str,
+                    screen_name: status.user.screen_name
                   }
+                };
+              }
 
-                  tweets_read.push(tweet);
-                } else {
-                  log.info(
-                    "Ignoring reply that didn't actually reference bot: " +
-                      status.full_text
-                  );
-                }
-              });
+              tweets_read.push(tweet);
             } else {
-              /* No new mentions since the last time we checked. */
-              log.info('No new mentions...');
+              log.info(
+                "Ignoring reply that didn't actually reference bot: " +
+                  status.full_text
+              );
             }
+          });
+        } else {
+          /* No new mentions since the last time we checked. */
+          log.info('No new mentions...');
+        }
 
-            resolve(tweets_read);
-          }
-        );
-      })
-      .catch((err: Error) => {
-        handleError(err);
-      })
-      .finally(() => {
-        log.debug(
-          `Releasing mutex key=${acquired_mutex.key}, id:${acquired_mutex.id}...`
-        );
-        mutex_client.releaseLock(acquired_mutex.key, {
-          id: acquired_mutex.id,
-          force: true
-        });
-        log.debug(
-          `Released mutex key=${acquired_mutex.key}, id:${acquired_mutex.id}...`
-        );
-      });
+        resolve(tweets_read);
+      }
+    );
   });
 }
 
@@ -206,41 +171,10 @@ export function GetNewDMs(last_dm_id: string): Promise<Array<ITweet>> {
 
   var ret: Array<ITweet> = [];
   var dm_promise = Promise.resolve(ret);
-  // Make sure we are the only process doing this or else we'll get dupes.
-  let acquired_mutex = {
-    key: '',
-    id: ''
-  };
-  mutex_client
-    .acquireLock(MUTEX_KEY['dm_processing'], {
-      ttl: MUTEX_TWIT_POST_MAX_HOLD_MS,
-      maxRetries: MUTEX_TWIT_POST_MAX_RETRIES,
-      lockRequestTimeout: MUTEX_TWIT_POST_MAX_WAIT_MS
-    })
-    .then(v => {
-      log.debug(`Acquired mutex ${v.id} and received key ${v.key}.`);
-      acquired_mutex.key = v.key;
-      acquired_mutex.id = v.id;
 
-      /**
-       *  TODO: Implement DM handling.
-       **/
-    })
-    .catch((err: Error) => {
-      handleError(err);
-    })
-    .finally(() => {
-      log.debug(
-        `Releasing mutex key=${acquired_mutex.key}, id:${acquired_mutex.id}...`
-      );
-      mutex_client.releaseLock(acquired_mutex.key, {
-        id: acquired_mutex.id,
-        force: true
-      });
-      log.debug(
-        `Released mutex key=${acquired_mutex.key}, id:${acquired_mutex.id}...`
-      );
-    });
+  /**
+   *  TODO: Implement DM handling.
+   **/
 
   return dm_promise;
 }
@@ -329,11 +263,20 @@ export function SendTweets(
   orig_tweet: ITweet,
   tweet_strings: Array<string>
 ): Promise<number> {
-  return sendTweetsInternal(
-    new Twit(config.twitter),
-    orig_tweet,
-    tweet_strings
-  );
+  try {
+    log.debug(`Locking tweet_mutex...`);
+    tweet_mutex.lock();
+    log.debug(`Locked tweet_mutex.`);
+    return sendTweetsInternal(
+      new Twit(config.twitter),
+      orig_tweet,
+      tweet_strings
+    );
+  } finally {
+    log.debug(`Unocking tweet_mutex...`);
+    tweet_mutex.unlock();
+    log.debug(`Unocked tweet_mutex.`);
+  }
 }
 
 function sendTweetsInternal(
