@@ -1,4 +1,4 @@
-let app_root_dir = require('app-root-dir').get();
+const packpath = require('packpath');
 
 import * as path from 'path';
 import * as fs from 'file-system';
@@ -8,19 +8,12 @@ import * as fs from 'file-system';
 export var __MODULE_VERSION__: string;
 export var __MODULE_NAME__: string;
 
+let packpath_parent = packpath.parent() ? packpath.parent() : packpath.self();
+let packpath_self = packpath.self();
+
 // Dependeing on whether we are running unittests or under node_modules hosted within an
 // app, we are either one level below, or two levels below package.json.
-let package_config_path = path.resolve(__dirname + '/../package.json');
-
-if (!fs.existsSync(package_config_path)) {
-  package_config_path = path.resolve(
-    package_config_path + '/../../package.json'
-  );
-
-  if (!fs.existsSync(package_config_path)) {
-    throw new Error(`package.config not found: ${package_config_path}.`);
-  }
-}
+let package_config_path = path.resolve(packpath_parent + '/package.json');
 
 var pjson = require(package_config_path);
 
@@ -30,7 +23,7 @@ __MODULE_VERSION__ = pjson.version;
 const chokidar = require('chokidar'),
   log4js = require('log4js');
 
-const config_path = path.resolve(app_root_dir + '/dist/config/log4js.json');
+const config_path = path.resolve(packpath_self + '/dist/config/log4js.json');
 
 // Load the config.
 log4js.configure(config_path);
@@ -40,7 +33,8 @@ log4js.configure(config_path);
 export var log = log4js.getLogger('result');
 
 log.addContext('module', __MODULE_NAME__);
-log.info(`app_root_dir: ${app_root_dir}.`);
+log.info(`package.json: ${package_config_path}.`);
+log.info(`log4js.json: ${config_path}.`);
 
 /**
  * Monitor the log4js config file and reloading log instances if the file changes.
