@@ -1,6 +1,6 @@
 {
   "name": "howsmydriving-twitter",
-  "version": "0.1.21",
+  "version": "0.1.31",
   "description": "Twitter abstraction for @HowsMyDrivingWA.",
   "main": "dist/index.js",
   "types": "definitions/index.d.ts",
@@ -8,9 +8,10 @@
     "definition": "definitions/index"
   },
   "dependencies": {
+    "app-root-dir": "^1.0.2",
     "chokidar": "^3.3.0",
     "file-system": "^2.2.2",
-    "howsmydriving-utils": "^0.1.82",
+    "howsmydriving-utils": "^0.1.83",
     "mutex-promise": "^0.1.0",
     "log4js": "^4.0.2",
     "soap": "^0.30.0",

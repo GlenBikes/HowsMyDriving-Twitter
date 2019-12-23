@@ -42,21 +42,6 @@ const config: any = {
 import { log } from './logging';
 log.info('Successfully imported log from ./logging.');
 
-const MUTEX_KEY: { [index: string]: string } = {
-  tweet_reading: '__HOWSMYDRIVING_TWEET_READING__',
-  dm_reading: '__HOWSMYDRIVING_DM_READING__'
-};
-
-//var mutex_client;
-
-//GetMutexClient().then(client => {
-//  mutex_client = client;
-//});
-var MutexPromise = require('mutex-promise');
-
-var tweet_mutex = new MutexPromise(MUTEX_KEY['tweet_reading']);
-var dm_mutex = new MutexPromise(MUTEX_KEY['dm_reading']);
-
 var bot_app_id: number;
 
 // We need the bot's app id to detect tweets from the bot
@@ -111,6 +96,8 @@ export function GetNewTweets(last_mention_id: string): Promise<Array<ITweet>> {
                 Since each tweet with a mention is processed in parallel, keep track of largest ID
                 and write that at the end.
                 */
+          log.debug(`Found ${data.statuses.length} tweets.`);
+
           data.statuses.forEach((status: Twit.Twitter.Status) => {
             if (CompareNumericStrings(maxTweetIdRead, status.id_str) < 0) {
               maxTweetIdRead = status.id_str;
@@ -125,11 +112,11 @@ export function GetNewTweets(last_mention_id: string): Promise<Array<ITweet>> {
             if (!chomped || botScreenNameRegexp.test(chomped_text)) {
               /* Don't reply to retweet or our own tweets. */
               if (status.hasOwnProperty('retweet_status')) {
-                log.info(`Ignoring retweet: ${status.full_text}`);
+                log.debug(`Ignoring retweet: ${status.full_text}`);
               } else if (status.user.id == bot_app_id) {
-                log.info('Ignoring our own tweet: ' + status.full_text);
+                log.debug('Ignoring our own tweet: ' + status.full_text);
               } else {
-                log.info(`Found ${PrintTweet(status)}`);
+                log.debug(`Found ${PrintTweet(status)}`);
 
                 var tweet: ITweet = {
                   id: status.id,
@@ -145,7 +132,7 @@ export function GetNewTweets(last_mention_id: string): Promise<Array<ITweet>> {
 
               tweets_read.push(tweet);
             } else {
-              log.info(
+              log.debug(
                 "Ignoring reply that didn't actually reference bot: " +
                   status.full_text
               );
@@ -153,7 +140,7 @@ export function GetNewTweets(last_mention_id: string): Promise<Array<ITweet>> {
           });
         } else {
           /* No new mentions since the last time we checked. */
-          log.info('No new mentions...');
+          log.debug('No new mentions...');
         }
 
         resolve(tweets_read);
@@ -177,6 +164,132 @@ export function GetNewDMs(last_dm_id: string): Promise<Array<ITweet>> {
    **/
 
   return dm_promise;
+}
+
+export function SendTweets(
+  region_name: string,
+  orig_tweet: ITweet,
+  tweet_strings: Array<string>
+): Promise<number> {
+  return sendTweetsInternal(
+    new Twit(config.twitter),
+    region_name,
+    orig_tweet,
+    tweet_strings
+  );
+}
+
+function sendTweetsInternal(
+  T: Twit,
+  region_name: string,
+  orig_tweet: ITweet,
+  tweet_strings: Array<string>
+): Promise<number> {
+  if (tweet_strings.length == 0) {
+    // return an promise that is already resolved, ending the recursive
+    // chain of promises that have been built.
+    return Promise.resolve(0);
+  }
+
+  // Clone the tweet_strings array so we don't modify the one passed to us
+  var tweet_strings_clone: Array<string> = [...tweet_strings];
+  var tweet_string: string = tweet_strings_clone.shift();
+
+  /* Now we can respond to each tweet. */
+  // When doing the initial reply to the user's tweet, we need to include their
+  // twitter account in the text of the tweet (i.e. @orig_tweet.user.screen_name).
+  // But when replying to our own replies, we should not include our own mention
+  // or else those tweets will show up in the timelines of everyone who
+  // follows the bot.
+  if (
+    !(
+      orig_tweet.user.screen_name.toUpperCase() ===
+      process.env.TWITTER_HANDLE.toUpperCase()
+    )
+  ) {
+    tweet_string = '@' + orig_tweet.user.screen_name + ' ' + tweet_string;
+  }
+
+  return new Promise<number>((resolve, reject) => {
+    let tweets_sent: number = 0;
+
+    log.debug(
+      `Replying to tweet '${orig_tweet.id_str}': ${tweet_string.trunc(100)}.`
+    );
+
+    // There will be one thread running this for each request we are
+    // processing. We need to make sure we don't send tweets in quick
+    // succession or Twitter will tag them as spam and they won't
+    // render i the thread of resposes.
+    // So wait at least INTER_TWEET_DELAY_MS ms between posts.
+    new Twit(config.twitter).post(
+      'statuses/update',
+      {
+        status: tweet_string,
+        in_reply_to_status_id: orig_tweet.id_str
+        /*,
+        auto_populate_reply_metadata: true*/
+      } as Twit.Params,
+      (err: Error, data: ITweet, response: http.IncomingMessage) => {
+        let twit_error_code: number = 0;
+
+        if (err && err.hasOwnProperty('code')) {
+          twit_error_code = (err as any)['code'];
+        }
+
+        if (err && twit_error_code != 187) {
+          handleError(err);
+        } else {
+          if (err && twit_error_code == 187) {
+            // This appears to be a "status is a duplicate" error which
+            // means we are trying to resend a tweet we already sent.
+            // Pretend we succeeded.
+            log.info(
+              `Error 187 sending tweet replyto id_str: ${orig_tweet.id_str}. Pretending successful.`
+            );
+
+            // Keep replying to the tweet we were told to reply to.
+            // This means that in this scenario, if any of the rest of the tweets in this
+            // thread have not been sent, they will create a new thread off the parent of
+            // this one.
+            // Not ideal, but the other alternatives are:
+            // 1) Query for the previous duplicate tweet and then pass that along
+            // 2) set all of the replies for this request to be PROCESSED even if they did not
+            //    all get tweeted.
+            data = orig_tweet;
+          } else {
+            tweets_sent++;
+            log.info(
+              `Sent tweet for region ${region_name} in response to id_str: ${
+                orig_tweet.id_str
+              }: ${PrintTweet(data)}`
+            );
+          }
+
+          // Wait a bit. It seems tweeting a whackload of tweets in quick succession
+          // can cause Twitter to think you're a troll bot or something and then some
+          // of the tweets will not display for users other than the bot account.
+          // See: https://twittercommunity.com/t/inconsistent-display-of-replies/117318/11
+          sleep(tweet_strings_clone.length > 0 ? INTER_TWEET_DELAY_MS : 0)
+            .then(() => {
+              // Send the rest of the responses. When those are sent, then resolve
+              // the local Promise.
+              sendTweetsInternal(T, region_name, data, tweet_strings_clone)
+                .then(tweets_sent_rest => {
+                  tweets_sent += tweets_sent_rest;
+                  resolve(tweets_sent);
+                })
+                .catch((err: Error) => {
+                  handleError(err);
+                });
+            })
+            .catch((err: Error) => {
+              handleError(err);
+            });
+        }
+      }
+    );
+  });
 }
 
 export function chompTweet(tweet: ITweet) {
@@ -254,139 +367,6 @@ function getAccountID(T: Twit): Promise<number> {
           handleError(err);
         }
         resolve(data.id);
-      }
-    );
-  });
-}
-
-export function SendTweets(
-  orig_tweet: ITweet,
-  tweet_strings: Array<string>
-): Promise<number> {
-  try {
-    log.debug(`Locking tweet_mutex...`);
-    tweet_mutex.lock();
-    log.debug(`Locked tweet_mutex.`);
-    return sendTweetsInternal(
-      new Twit(config.twitter),
-      orig_tweet,
-      tweet_strings
-    );
-  } finally {
-    log.debug(`Unocking tweet_mutex...`);
-    tweet_mutex.unlock();
-    log.debug(`Unocked tweet_mutex.`);
-  }
-}
-
-function sendTweetsInternal(
-  T: Twit,
-  orig_tweet: ITweet,
-  tweet_strings: Array<string>
-): Promise<number> {
-  if (tweet_strings.length == 0) {
-    // return an promise that is already resolved, ending the recursive
-    // chain of promises that have been built.
-    return Promise.resolve(0);
-  }
-
-  // Clone the tweet_strings array so we don't modify the one passed to us
-  var tweet_strings_clone: Array<string> = [...tweet_strings];
-  var tweet_string: string = tweet_strings_clone.shift();
-
-  /* Now we can respond to each tweet. */
-  // When doing the initial reply to the user's tweet, we need to include their
-  // twitter account in the text of the tweet (i.e. @orig_tweet.user.screen_name).
-  // But when replying to our own replies, we should not include our own mention
-  // or else those tweets will show up in the timelines of everyone who
-  // follows the bot.
-  var tweetText = '';
-
-  if (
-    !(
-      orig_tweet.user.screen_name.toUpperCase() ===
-      process.env.TWITTER_HANDLE.toUpperCase()
-    )
-  ) {
-    tweetText += '@' + orig_tweet.user.screen_name + ' ';
-  }
-
-  log.debug(
-    `Sending Tweet in response to id_str: ${orig_tweet.id_str}: ${tweet_string}.`
-  );
-  return new Promise<number>((resolve, reject) => {
-    let tweets_sent: number = 0;
-
-    // There will be one thread running this for each request we are
-    // processing. We need to make sure we don't send tweets in quick
-    // succession or Twitter will tag them as spam and they won't
-    // render i the thread of resposes.
-    // So wait at least INTER_TWEET_DELAY_MS ms between posts.
-    new Twit(config.twitter).post(
-      'statuses/update',
-      {
-        status: tweetText,
-        in_reply_to_status_id: orig_tweet.id_str
-        /*,
-        auto_populate_reply_metadata: true*/
-      } as Twit.Params,
-      (err: Error, data: ITweet, response: http.IncomingMessage) => {
-        let twit_error_code: number = 0;
-
-        if (err && err.hasOwnProperty('code')) {
-          twit_error_code = (err as any)['code'];
-        }
-
-        if (err && twit_error_code != 187) {
-          handleError(err);
-        } else {
-          if (err && twit_error_code == 187) {
-            // This appears to be a "status is a duplicate" error which
-            // means we are trying to resend a tweet we already sent.
-            // Pretend we succeeded.
-            log.info(
-              `Received error 187 sending tweet in response to id_str: ${orig_tweet.id_str}. Pretending we sent successfully.`
-            );
-
-            // Keep replying to the tweet we were told to reply to.
-            // This means that in this scenario, if any of the rest of the tweets in this
-            // thread have not been sent, they will create a new thread off the parent of
-            // this one.
-            // Not ideal, but the other alternatives are:
-            // 1) Query for the previous duplicate tweet and then pass that along
-            // 2) set all of the replies for this request to be PROCESSED even if they did not
-            //    all get tweeted.
-            data = orig_tweet;
-          } else {
-            tweets_sent++;
-            log.info(
-              `Sent tweet in response to id_str: ${
-                orig_tweet.id_str
-              }: ${PrintTweet(data)}`
-            );
-          }
-
-          // Wait a bit. It seems tweeting a whackload of tweets in quick succession
-          // can cause Twitter to think you're a troll bot or something and then some
-          // of the tweets will not display for users other than the bot account.
-          // See: https://twittercommunity.com/t/inconsistent-display-of-replies/117318/11
-          sleep(tweet_strings_clone.length > 0 ? INTER_TWEET_DELAY_MS : 0)
-            .then(() => {
-              // Send the rest of the responses. When those are sent, then resolve
-              // the local Promise.
-              sendTweetsInternal(T, data, tweet_strings_clone)
-                .then(tweets_sent_rest => {
-                  tweets_sent += tweets_sent_rest;
-                  resolve(tweets_sent);
-                })
-                .catch((err: Error) => {
-                  handleError(err);
-                });
-            })
-            .catch((err: Error) => {
-              handleError(err);
-            });
-        }
       }
     );
   });
