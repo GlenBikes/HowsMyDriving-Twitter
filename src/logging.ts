@@ -1,3 +1,4 @@
+import { sleep } from 'howsmydriving-utils';
 const packpath = require('packpath');
 
 import * as path from 'path';
@@ -56,13 +57,17 @@ var watcher = chokidar.watch(config_path, {
  *       they update to the new log level?
  **/
 function reloadlog(reason: string) {
+  /*
   log.info(`Reloading log config due to config file ${reason}.`);
   log4js.shutdown(() => {
-    log4js.configure(config_path);
-    log = log4js.getLogger('reason');
+    sleep(10000).then(() => {
+      log4js.configure(config_path);
+      log = log4js.getLogger('reason');
 
-    log.addContext('module', __MODULE_NAME__);
+      log.addContext('module', __MODULE_NAME__);
+    });
   });
+  */
 }
 
 // Handle the change/add events for the log4js config file.
