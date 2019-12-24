@@ -53,7 +53,10 @@ getAccountID(new Twit(config.twitter))
     handleError(err);
   });
 
-export function GetNewTweets(last_mention_id: string): Promise<Array<ITweet>> {
+export function GetNewTweets(
+  last_mention_id: string,
+  bot_account_name: string = process.env.TWITTER_HANDLE
+): Promise<Array<ITweet>> {
   const T: Twit = new Twit(config.twitter);
   let maxTweetIdRead: string = last_mention_id;
 
@@ -70,7 +73,7 @@ export function GetNewTweets(last_mention_id: string): Promise<Array<ITweet>> {
     T.get(
       'search/tweets',
       {
-        q: '%40' + process.env.TWITTER_HANDLE,
+        q: '%40' + bot_account_name,
         since_id: last_mention_id,
         tweet_mode: 'extended'
       },
@@ -86,15 +89,15 @@ export function GetNewTweets(last_mention_id: string): Promise<Array<ITweet>> {
         var tweets_read: Array<ITweet> = [];
 
         if (data.statuses.length) {
-          /* 
-                Iterate over each tweet. 
-
-                The replies can occur concurrently, but the threaded replies to each tweet must, 
-                within that thread, execute sequentially. 
-
-                Since each tweet with a mention is processed in parallel, keep track of largest ID
-                and write that at the end.
-                */
+          /**
+           * Iterate over each tweet.
+           *
+           * The replies can occur concurrently, but the threaded replies to each tweet must,
+           * within that thread, execute sequentially.
+           *
+           * Since each tweet with a mention is processed in parallel, keep track of largest ID
+           * and write that at the end.
+           **/
           log.debug(`Found ${data.statuses.length} tweets.`);
 
           data.statuses.forEach((status: Twit.Twitter.Status) => {
@@ -102,16 +105,18 @@ export function GetNewTweets(last_mention_id: string): Promise<Array<ITweet>> {
               maxTweetIdRead = status.id_str;
             }
 
-            /*
-                  Make sure this isn't a reply to one of the bot's tweets which would
-                  include the bot screen name in full_text, but only due to replies.
-                  */
+            /**
+             * Make sure this isn't a reply to one of the bot's tweets which would
+             * include the bot screen name in full_text, but only due to replies.
+             **/
             const { chomped, chomped_text } = chompTweet(status);
 
             if (!chomped || botScreenNameRegexp.test(chomped_text)) {
               /* Don't reply to retweet or our own tweets. */
-              if (status.hasOwnProperty('retweet_status')) {
-                log.debug(`Ignoring retweet: ${status.full_text}`);
+              if (status.hasOwnProperty('retweeted_status')) {
+                log.debug(
+                  `Ignoring retweet (by ${status.user.screen_name}): ${status.full_text}`
+                );
               } else if (status.user.id == bot_app_id) {
                 log.debug('Ignoring our own tweet: ' + status.full_text);
               } else {
@@ -127,13 +132,12 @@ export function GetNewTweets(last_mention_id: string): Promise<Array<ITweet>> {
                     screen_name: status.user.screen_name
                   }
                 };
-              }
 
-              tweets_read.push(tweet);
+                tweets_read.push(tweet);
+              }
             } else {
               log.debug(
-                "Ignoring reply that didn't actually reference bot: " +
-                  status.full_text
+                `Ignoring reply (by ${status.user.screen_name}) that didn't actually reference bot: ${status.full_text}`
               );
             }
           });
@@ -194,7 +198,6 @@ function sendTweetsInternal(
   var tweet_strings_clone: Array<string> = [...tweet_strings];
   var tweet_string: string = tweet_strings_clone.shift();
 
-  /* Now we can respond to each tweet. */
   // When doing the initial reply to the user's tweet, we need to include their
   // twitter account in the text of the tweet (i.e. @orig_tweet.user.screen_name).
   // But when replying to our own replies, we should not include our own mention
@@ -337,6 +340,7 @@ export function GetTweetById(id: string): Promise<ITweet> {
   return new Promise<ITweet>((resolve, reject) => {
     var retTweet;
 
+    log.debug(`Calling statuses/show/${id}`);
     T.get(
       `statuses/show/${id}`,
       { tweet_mode: 'extended' },
@@ -347,9 +351,9 @@ export function GetTweetById(id: string): Promise<ITweet> {
       ) => {
         if (err) {
           handleError(err);
-          reject(tweet);
         }
 
+        log.debug(`Returning tweet: ${PrintTweet(tweet)}.`);
         resolve(tweet);
       }
     );

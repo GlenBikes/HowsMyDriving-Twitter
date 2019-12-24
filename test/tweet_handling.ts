@@ -1,8 +1,5 @@
-//import { tableNames } from '../src/server';
 import { GetNewTweets } from '../src/twitter';
 import { createTweet } from './mocks/twitter';
-//import { uuidv1 } from 'howsmydriving-utils';
-//import * as strUtils from '../src/util/stringutils';
 
 var assert = require('assert'),
   sinon = require('sinon'),
