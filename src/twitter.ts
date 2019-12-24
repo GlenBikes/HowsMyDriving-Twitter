@@ -40,7 +40,6 @@ const config: any = {
 };
 
 import { log } from './logging';
-log.info('Successfully imported log from ./logging.');
 
 var bot_app_id: number;
 

@@ -34,8 +34,6 @@ log4js.configure(config_path);
 export var log = log4js.getLogger('result');
 
 log.addContext('module', __MODULE_NAME__);
-log.info(`package.json: ${package_config_path}.`);
-log.info(`log4js.json: ${config_path}.`);
 
 /**
  * Monitor the log4js config file and reloading log instances if the file changes.
