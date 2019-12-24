@@ -1,6 +1,9 @@
 .aws/**
+.bash*/**
+.oresoftware/**
 dist/**
 definitions/**
 log/**
 .localstore/**
 .v8*
+.vi*
