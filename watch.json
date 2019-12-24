@@ -1,0 +1,24 @@
+{
+  "install": {
+    "include": [
+      "^package\\.json$",
+      "^\\.env$"
+    ]
+  },
+  "restart": {
+    "exclude": [
+      "log4js.json",
+      "^data/",
+      "^definitions/",
+      "^log/",
+      ".*dist.*/"
+    ],
+    "include": [  
+      ".env",
+      "\\.ts$",
+      "\\.js$",
+      "\\.json$"
+    ]
+  },
+  "throttle": 2000
+}
