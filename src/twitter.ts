@@ -9,7 +9,6 @@ import { DumpObject } from 'howsmydriving-utils';
 import { IRegion } from 'howsmydriving-utils';
 import { ICitation } from 'howsmydriving-utils';
 import { CompareNumericStrings } from 'howsmydriving-utils';
-import { SplitLongLines } from 'howsmydriving-utils';
 import { PrintTweet } from 'howsmydriving-utils';
 import { sleep } from 'howsmydriving-utils';
 
