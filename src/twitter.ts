@@ -229,6 +229,8 @@ function sendTweetsInternal(
         status: tweet_string,
         in_reply_to_status_id: orig_tweet.id_str
         /*,
+        in_reply_to_status_id_str: orig_tweet.id_str
+        ,
         auto_populate_reply_metadata: true*/
       } as Twit.Params,
       (err: Error, data: ITweet, response: http.IncomingMessage) => {
