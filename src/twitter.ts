@@ -3,16 +3,12 @@ import * as http from 'http';
 import * as Twit from 'twit';
 
 // howsmydriving-utils
-import { Citation } from 'howsmydriving-utils';
-import { CitationIds } from 'howsmydriving-utils';
-import { DumpObject } from 'howsmydriving-utils';
-import { IRegion } from 'howsmydriving-utils';
-import { ICitation } from 'howsmydriving-utils';
+import { IRegion, ICitation, Citation, CitationIds } from 'howsmydriving-utils';
+import { DumpObject, PrintTweet } from 'howsmydriving-utils';
 import { CompareNumericStrings } from 'howsmydriving-utils';
-import { PrintTweet } from 'howsmydriving-utils';
 import { sleep } from 'howsmydriving-utils';
 
-import { ITweet, ITwitterUser } from './interfaces';
+import { ITweet, ITwitterUser, IGetTweetsResponse } from './interfaces';
 
 // legacy commonjs modules
 const fs = require('fs'),
@@ -40,13 +36,23 @@ const config: any = {
 
 import { log } from './logging';
 
-var bot_app_id: number;
+var bot_info: ITwitterUser = {} as ITwitterUser;
+
+// Set the screen_name default to be what's in .env files
+bot_info.screen_name = process.env.TWITTER_HANDLE
+  ? process.env.TWITTER_HANDLE
+  : '';
 
 // We need the bot's app id to detect tweets from the bot
-getAccountID(new Twit(config.twitter))
-  .then((app_id: number) => {
-    bot_app_id = app_id;
-    log.info(`Loaded Twitter bot's app id: ${bot_app_id}.`);
+getAccount(new Twit(config.twitter))
+  .then(twitter_user => {
+    bot_info.id = twitter_user.id;
+    bot_info.id_str = twitter_user.id_str;
+    bot_info.screen_name = twitter_user.screen_name;
+
+    log.info(
+      `Loaded Twitter bot's info: id: ${bot_info.id} id_str: ${bot_info.id_str} screen_name: ${bot_info.screen_name}.`
+    );
   })
   .catch(err => {
     handleError(err);
@@ -55,7 +61,7 @@ getAccountID(new Twit(config.twitter))
 export function GetNewTweets(
   last_mention_id: string,
   bot_account_name: string = process.env.TWITTER_HANDLE
-): Promise<Array<ITweet>> {
+): Promise<IGetTweetsResponse> {
   const T: Twit = new Twit(config.twitter);
   let maxTweetIdRead: string = last_mention_id;
 
@@ -66,7 +72,7 @@ export function GetNewTweets(
   // Collect promises from these operations so they can go in parallel
   var twitter_promises: Array<Promise<void>> = [];
 
-  return new Promise<Array<ITweet>>((resolve, reject) => {
+  return new Promise<IGetTweetsResponse>((resolve, reject) => {
     log.debug(`Checking for tweets greater than ${last_mention_id}.`);
     /* Next, let's search for Tweets that mention our bot, starting after the last mention we responded to. */
     T.get(
@@ -116,7 +122,7 @@ export function GetNewTweets(
                 log.debug(
                   `Ignoring retweet (by ${status.user.screen_name}): ${status.full_text}`
                 );
-              } else if (status.user.id == bot_app_id) {
+              } else if (status.user.id == bot_info.id) {
                 log.debug('Ignoring our own tweet: ' + status.full_text);
               } else {
                 log.debug(`Found ${PrintTweet(status)}`);
@@ -145,7 +151,12 @@ export function GetNewTweets(
           log.debug('No new mentions...');
         }
 
-        resolve(tweets_read);
+        let ret: IGetTweetsResponse = {
+          tweets: tweets_read,
+          last_tweet_read_id: maxTweetIdRead
+        } as IGetTweetsResponse;
+
+        resolve(ret);
       }
     );
   });
@@ -187,11 +198,14 @@ function sendTweetsInternal(
   orig_tweet: ITweet,
   tweet_strings: Array<string>
 ): Promise<number> {
+  log.info(`checking length of tweet_strings...`);
   if (tweet_strings.length == 0) {
+    log.info(`checked length of tweet_strings and it is empty.`);
     // return an promise that is already resolved, ending the recursive
     // chain of promises that have been built.
     return Promise.resolve(0);
   }
+  log.info(`checked length of tweet_strings and it is not empty.`);
 
   // Clone the tweet_strings array so we don't modify the one passed to us
   var tweet_strings_clone: Array<string> = [...tweet_strings];
@@ -202,18 +216,16 @@ function sendTweetsInternal(
   // But when replying to our own replies, we should not include our own mention
   // or else those tweets will show up in the timelines of everyone who
   // follows the bot.
-  if (
-    !(
-      orig_tweet.user.screen_name.toUpperCase() ===
-      process.env.TWITTER_HANDLE.toUpperCase()
-    )
-  ) {
+  if (!IsMe(orig_tweet.user.id_str)) {
     tweet_string = '@' + orig_tweet.user.screen_name + ' ' + tweet_string;
   }
 
   return new Promise<number>((resolve, reject) => {
     let tweets_sent: number = 0;
 
+    log.info(
+      `About to truncate tweet_string ${tweet_string} to 100 characters.`
+    );
     log.debug(
       `Replying to tweet '${orig_tweet.id_str}': ${tweet_string.trunc(100)}.`
     );
@@ -240,22 +252,43 @@ function sendTweetsInternal(
           handleError(err);
         } else {
           if (err && twit_error_code == 187) {
+            log.info(`HMDWATwit: got 187 error from Twitter.`);
             // This appears to be a "status is a duplicate" error which
             // means we are trying to resend a tweet we already sent.
-            // Pretend we succeeded.
-            log.info(
-              `Error 187 sending tweet replyto id_str: ${orig_tweet.id_str}. Pretending successful.`
-            );
+            // If the tweet we are replying to is not one of ours (i.e. the first
+            // reply in our reply thread), then fail here because we can retry again
+            // later and it should eventually succeed once the last tweet gets old
+            // enough that Twitter no longer treats this as a duplicate.
+            if (!IsMe(orig_tweet.id_str) && 1 + 1 + 1 == 2 + 1 - 1) {
+              log.info(
+                `HMDWATwit: Detected we were replying to someone else's tweet. Creating DuplicateError.`
+              );
+              let err: Error = new Error(
+                `Duplicate tweet detected. Try again later or add a unique id.`
+              );
+              err.name = 'DuplicateError';
+              reject(err);
+            } else {
+              // It seems we started a reply thread and then one of the 2 thru n replies
+              // was detected as a duplicate by Twitter. It seems this should never happen.
+              // However, if it does, we are going to just pretend this tweet was successful
+              // and move on to the next one in the thread. Failing halfway through a reply
+              // thread would be difficult to recover from in a way that we can correctly
+              // continue the thread later.
+              log.info(
+                `Error 187 sending tweet replyto id_str: ${orig_tweet.id_str}. Pretending successful.`
+              );
 
-            // Keep replying to the tweet we were told to reply to.
-            // This means that in this scenario, if any of the rest of the tweets in this
-            // thread have not been sent, they will create a new thread off the parent of
-            // this one.
-            // Not ideal, but the other alternatives are:
-            // 1) Query for the previous duplicate tweet and then pass that along
-            // 2) set all of the replies for this request to be PROCESSED even if they did not
-            //    all get tweeted.
-            data = orig_tweet;
+              // Keep replying to the tweet we were told to reply to.
+              // This means that in this scenario, if any of the rest of the tweets in this
+              // thread have not been sent, they will create a new thread off the parent of
+              // this one.
+              // Not ideal, but the other alternatives are:
+              // 1) Query for the previous duplicate tweet and then pass that along
+              // 2) set all of the replies for this request to be PROCESSED even if they did not
+              //    all get tweeted.
+              data = orig_tweet;
+            }
           } else {
             tweets_sent++;
             log.info(
@@ -325,7 +358,7 @@ function handleError(error: Error): void {
       .slice(0, 10)
       .join('\n');
   }
-  var formattedError = `===============================================================================\n${error.message}\n${stacktrace}`;
+  var formattedError = `${error.message}\n${stacktrace}`;
 
   log.error(formattedError);
   throw error;
@@ -357,7 +390,7 @@ export function GetTweetById(id: string): Promise<ITweet> {
   });
 }
 
-function getAccountID(T: Twit): Promise<number> {
+function getAccount(T: Twit): Promise<Twit.Twitter.User> {
   return new Promise((resolve, reject) => {
     T.get(
       'account/verify_credentials',
@@ -366,8 +399,14 @@ function getAccountID(T: Twit): Promise<number> {
         if (err) {
           handleError(err);
         }
-        resolve(data.id);
+        resolve(data);
       }
     );
   });
+}
+
+//? TODO: We should really be doing this by user ID, not screen name
+function IsMe(id_str: string): boolean {
+  log.info(`Checking if it is me: '${id_str}' '${bot_info.id_str}'`);
+  return CompareNumericStrings(id_str, bot_info.id_str) == 0;
 }

@@ -14,7 +14,7 @@ let packpath_self = packpath.self();
 
 // Dependeing on whether we are running unittests or under node_modules hosted within an
 // app, we are either one level below, or two levels below package.json.
-let package_config_path = path.resolve(packpath_parent + '/package.json');
+let package_config_path = path.resolve(packpath_self + '/package.json');
 
 var pjson = require(package_config_path);
 

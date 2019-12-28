@@ -1,6 +1,6 @@
 {
   "name": "howsmydriving-twitter",
-  "version": "0.1.47",
+  "version": "0.1.54",
   "description": "Twitter abstraction for @HowsMyDrivingWA.",
   "main": "dist/index.js",
   "types": "definitions/index.d.ts",
