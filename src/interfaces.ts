@@ -18,3 +18,8 @@ export interface ITweet {
   display_text_range?: Array<number>;
   user?: ITwitterUser;
 }
+
+export interface IGetTweetsResponse {
+  tweets: Array<ITweet>;
+  last_tweet_read_id: string;
+}
