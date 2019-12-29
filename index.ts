@@ -1,24 +1,44 @@
 const packpath = require('packpath');
-const appRoot = require('app-root-dir').get();
+const appRootDir = require('app-root-dir').get();
+const appRootPath = require('app-root-path');
+const appRoot = require('app-root');
 
 import * as path from 'path';
 
 let packpath_parent = packpath.parent() ? packpath.parent() : packpath.self();
 let packpath_self = packpath.self();
 
+console.log(
+  `howsmydriving-twitter:\n - packpath_self: ${packpath_self}\n - packpath_parent: ${packpath.parent()}\n - app-root-dir: ${appRootDir}\n - app-root-path: ${appRootPath}\n - app-root (current): see below\n - app-root (root): see below\n - __dirname: ${__dirname}\n - .: ${path.resolve(
+    '.'
+  )}`
+);
+
+appRoot({
+  directory: '.',
+  success: function(roots) {
+    console.log(`howsmydriving-twitter:\n - app-root (current): ${roots}`);
+  }
+});
+
+appRoot({
+  directory: '/',
+  success: function(roots) {
+    console.log(`howsmydriving-twitter:\n - app-root (root): ${roots}`);
+  }
+});
+
 export const log4js_config_path = path.resolve(
-  appRoot + '/dist/config/log4js.json'
+  appRootDir + '/dist/config/log4js.json'
+);
+
+console.log(
+  `howsmydriving-twitter: log4js_config_path:\n - ${log4js_config_path}`
 );
 
 // Dependeing on whether we are running unittests or under node_modules hosted within an
 // app, we are either one level below, or two levels below package.json.
-let package_config_path = path.resolve(appRoot + '/package.json');
-console.log(
-  `howsmydriving-twitter: config path: ${package_config_path}, appRoot: ${appRoot}.`
-);
-console.log(
-  `howsmydriving-twitter: packpath_self: ${packpath_self}, packpath_parent: ${packpath_parent}, appRoot: ${appRoot}, __dirname: ${__dirname}.`
-);
+let package_config_path = path.resolve(packpath_parent + '/package.json');
 
 var pjson = require(package_config_path);
 

@@ -200,14 +200,11 @@ function sendTweetsInternal(
   orig_tweet: ITweet,
   tweet_strings: Array<string>
 ): Promise<number> {
-  log.info(`checking length of tweet_strings...`);
   if (tweet_strings.length == 0) {
-    log.info(`checked length of tweet_strings and it is empty.`);
     // return an promise that is already resolved, ending the recursive
     // chain of promises that have been built.
     return Promise.resolve(0);
   }
-  log.info(`checked length of tweet_strings and it is not empty.`);
 
   // Clone the tweet_strings array so we don't modify the one passed to us
   var tweet_strings_clone: Array<string> = [...tweet_strings];
@@ -218,21 +215,19 @@ function sendTweetsInternal(
   // But when replying to our own replies, we should not include our own mention
   // or else those tweets will show up in the timelines of everyone who
   // follows the bot.
-  log.info(`orig_tweet: ${DumpObject(orig_tweet)}.`);
-  if (!orig_tweet || !orig_tweet.user) {
-    log.info(`About to crash: ${DumpObject(orig_tweet)}.`);
-  }
-
   if (!IsMe(orig_tweet.user.id_str)) {
     tweet_string = '@' + orig_tweet.user.screen_name + ' ' + tweet_string;
+  }
+
+  if (tweet_string.length >= 279) {
+    throw new Error(
+      `too long: ${tweet_string}, orig_tweet: ${DumpObject(orig_tweet)}.`
+    );
   }
 
   return new Promise<number>((resolve, reject) => {
     let tweets_sent: number = 0;
 
-    log.info(
-      `About to truncate tweet_string ${tweet_string} to 100 characters.`
-    );
     log.debug(
       `Replying to tweet '${orig_tweet.id_str}': ${tweet_string.trunc(100)}.`
     );
@@ -269,7 +264,7 @@ function sendTweetsInternal(
             // enough that Twitter no longer treats this as a duplicate.
             if (!IsMe(orig_tweet.id_str)) {
               log.info(
-                `HMDWATwit: Detected we were replying to someone else's tweet. Creating DuplicateError.`
+                `Returning DuplicateError to indicate this is retryable.`
               );
               let err: Error = new Error(
                 `Duplicate tweet detected. Try again later or add a unique id.`
@@ -285,7 +280,7 @@ function sendTweetsInternal(
               // thread would be difficult to recover from in a way that we can correctly
               // continue the thread later.
               log.info(
-                `Error 187 sending tweet replyto id_str: ${orig_tweet.id_str}. Pretending successful.`
+                `Error 187 but replying to our own tweet id_str: ${orig_tweet.id_str}. Pretending succeeded since no easy way to retry this.`
               );
 
               // Keep replying to the tweet we were told to reply to.
@@ -301,14 +296,14 @@ function sendTweetsInternal(
           }
         } else {
           tweets_sent++;
-          log.info(
+          log.debug(
             `Sent tweet for region ${region_name} in response to id_str: ${
               orig_tweet.id_str
             }: ${PrintTweet(data)}`
           );
         }
 
-        log.info(`Waiting before sending rest of tweets...`);
+        log.debug(`Waiting before sending rest of tweets...`);
 
         // Wait a bit. It seems tweeting a whackload of tweets in quick succession
         // can cause Twitter to think you're a troll bot or something and then some
@@ -324,14 +319,10 @@ function sendTweetsInternal(
                 resolve(tweets_sent);
               })
               .catch((err: Error) => {
-                log.info(
-                  `sendTweetsInternal: inside catch for sendTweetsInternal. err: ${err}`
-                );
                 reject(err);
               });
           })
           .catch((err: Error) => {
-            log.info(`sendTweetsInternal: inside catch for sleep. err: ${err}`);
             reject(err);
           });
       }
@@ -421,8 +412,12 @@ function getAccount(T: Twit): Promise<Twit.Twitter.User> {
   });
 }
 
-//? TODO: We should really be doing this by user ID, not screen name
 function IsMe(id_str: string): boolean {
-  log.info(`Checking if it is me: '${id_str}' '${bot_info.id_str}'`);
-  return CompareNumericStrings(id_str, bot_info.id_str) == 0;
+  let ret: boolean = CompareNumericStrings(id_str, bot_info.id_str) == 0;
+  let result = ret ? 'It is me.' : 'It is not me.';
+  log.info(
+    `Checking if it is me: '${id_str}' '${bot_info.id_str}'...${result}`
+  );
+
+  return ret;
 }
