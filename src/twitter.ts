@@ -65,14 +65,15 @@ export function GetNewTweets(
   const T: Twit = new Twit(config.twitter);
   let maxTweetIdRead: string = last_mention_id;
 
-  if (!last_mention_id) {
-    handleError(new Error('ERROR: last_mention_id must be provided.!'));
-  }
-
-  // Collect promises from these operations so they can go in parallel
-  var twitter_promises: Array<Promise<void>> = [];
-
   return new Promise<IGetTweetsResponse>((resolve, reject) => {
+    if (!last_mention_id) {
+      reject(new Error('ERROR: last_mention_id must be provided.!'));
+      return;
+    }
+
+    // Collect promises from these operations so they can go in parallel
+    var twitter_promises: Array<Promise<void>> = [];
+
     log.debug(`Checking for tweets greater than ${last_mention_id}.`);
     /* Next, let's search for Tweets that mention our bot, starting after the last mention we responded to. */
     T.get(
@@ -88,7 +89,8 @@ export function GetNewTweets(
         response: http.IncomingMessage
       ) {
         if (err) {
-          handleError(err);
+          reject(err);
+          return;
         }
 
         var tweets_read: Array<ITweet> = [];
@@ -216,6 +218,11 @@ function sendTweetsInternal(
   // But when replying to our own replies, we should not include our own mention
   // or else those tweets will show up in the timelines of everyone who
   // follows the bot.
+  log.info(`orig_tweet: ${DumpObject(orig_tweet)}.`);
+  if (!orig_tweet || !orig_tweet.user) {
+    log.info(`About to crash: ${DumpObject(orig_tweet)}.`);
+  }
+
   if (!IsMe(orig_tweet.user.id_str)) {
     tweet_string = '@' + orig_tweet.user.screen_name + ' ' + tweet_string;
   }
@@ -241,17 +248,18 @@ function sendTweetsInternal(
         status: tweet_string,
         in_reply_to_status_id: orig_tweet.id_str
       } as Twit.Params,
-      (err: Error, data: ITweet, response: http.IncomingMessage) => {
+      (err: Error, data: ITweet) => {
         let twit_error_code: number = 0;
 
-        if (err && err.hasOwnProperty('code')) {
-          twit_error_code = (err as any)['code'];
-        }
+        if (err) {
+          if (err.hasOwnProperty('code')) {
+            twit_error_code = (err as any)['code'];
+          }
 
-        if (err && twit_error_code != 187) {
-          handleError(err);
-        } else {
-          if (err && twit_error_code == 187) {
+          if (twit_error_code != 187) {
+            reject(err);
+            return;
+          } else {
             log.info(`HMDWATwit: got 187 error from Twitter.`);
             // This appears to be a "status is a duplicate" error which
             // means we are trying to resend a tweet we already sent.
@@ -259,7 +267,7 @@ function sendTweetsInternal(
             // reply in our reply thread), then fail here because we can retry again
             // later and it should eventually succeed once the last tweet gets old
             // enough that Twitter no longer treats this as a duplicate.
-            if (!IsMe(orig_tweet.id_str) && 1 + 1 + 1 == 2 + 1 - 1) {
+            if (!IsMe(orig_tweet.id_str)) {
               log.info(
                 `HMDWATwit: Detected we were replying to someone else's tweet. Creating DuplicateError.`
               );
@@ -268,6 +276,7 @@ function sendTweetsInternal(
               );
               err.name = 'DuplicateError';
               reject(err);
+              return;
             } else {
               // It seems we started a reply thread and then one of the 2 thru n replies
               // was detected as a duplicate by Twitter. It seems this should never happen.
@@ -289,36 +298,42 @@ function sendTweetsInternal(
               //    all get tweeted.
               data = orig_tweet;
             }
-          } else {
-            tweets_sent++;
-            log.info(
-              `Sent tweet for region ${region_name} in response to id_str: ${
-                orig_tweet.id_str
-              }: ${PrintTweet(data)}`
-            );
           }
-
-          // Wait a bit. It seems tweeting a whackload of tweets in quick succession
-          // can cause Twitter to think you're a troll bot or something and then some
-          // of the tweets will not display for users other than the bot account.
-          // See: https://twittercommunity.com/t/inconsistent-display-of-replies/117318/11
-          sleep(tweet_strings_clone.length > 0 ? INTER_TWEET_DELAY_MS : 0)
-            .then(() => {
-              // Send the rest of the responses. When those are sent, then resolve
-              // the local Promise.
-              sendTweetsInternal(T, region_name, data, tweet_strings_clone)
-                .then(tweets_sent_rest => {
-                  tweets_sent += tweets_sent_rest;
-                  resolve(tweets_sent);
-                })
-                .catch((err: Error) => {
-                  handleError(err);
-                });
-            })
-            .catch((err: Error) => {
-              handleError(err);
-            });
+        } else {
+          tweets_sent++;
+          log.info(
+            `Sent tweet for region ${region_name} in response to id_str: ${
+              orig_tweet.id_str
+            }: ${PrintTweet(data)}`
+          );
         }
+
+        log.info(`Waiting before sending rest of tweets...`);
+
+        // Wait a bit. It seems tweeting a whackload of tweets in quick succession
+        // can cause Twitter to think you're a troll bot or something and then some
+        // of the tweets will not display for users other than the bot account.
+        // See: https://twittercommunity.com/t/inconsistent-display-of-replies/117318/11
+        sleep(tweet_strings_clone.length > 0 ? INTER_TWEET_DELAY_MS : 0)
+          .then(() => {
+            // Send the rest of the responses. When those are sent, then resolve
+            // the local Promise.
+            sendTweetsInternal(T, region_name, data, tweet_strings_clone)
+              .then(tweets_sent_rest => {
+                tweets_sent += tweets_sent_rest;
+                resolve(tweets_sent);
+              })
+              .catch((err: Error) => {
+                log.info(
+                  `sendTweetsInternal: inside catch for sendTweetsInternal. err: ${err}`
+                );
+                reject(err);
+              });
+          })
+          .catch((err: Error) => {
+            log.info(`sendTweetsInternal: inside catch for sleep. err: ${err}`);
+            reject(err);
+          });
       }
     );
   });
@@ -380,11 +395,11 @@ export function GetTweetById(id: string): Promise<ITweet> {
         response: http.IncomingMessage
       ) => {
         if (err) {
-          handleError(err);
+          reject(err);
+        } else {
+          log.debug(`Returning tweet: ${PrintTweet(tweet)}.`);
+          resolve(tweet);
         }
-
-        log.debug(`Returning tweet: ${PrintTweet(tweet)}.`);
-        resolve(tweet);
       }
     );
   });
@@ -397,9 +412,10 @@ function getAccount(T: Twit): Promise<Twit.Twitter.User> {
       {},
       (err: Error, data: any, response: http.IncomingMessage) => {
         if (err) {
-          handleError(err);
+          reject(err);
+        } else {
+          resolve(data);
         }
-        resolve(data);
       }
     );
   });
