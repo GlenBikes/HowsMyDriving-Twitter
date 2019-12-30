@@ -1,7 +1,6 @@
 const packpath = require('packpath');
 const appRootDir = require('app-root-dir').get();
 const appRootPath = require('app-root-path');
-const appRoot = require('app-root');
 
 import * as path from 'path';
 
@@ -13,20 +12,6 @@ console.log(
     '.'
   )}`
 );
-
-appRoot({
-  directory: '.',
-  success: function(roots) {
-    console.log(`howsmydriving-twitter:\n - app-root (current): ${roots}`);
-  }
-});
-
-appRoot({
-  directory: '/',
-  success: function(roots) {
-    console.log(`howsmydriving-twitter:\n - app-root (root): ${roots}`);
-  }
-});
 
 export const log4js_config_path = path.resolve(
   appRootDir + '/dist/config/log4js.json'
