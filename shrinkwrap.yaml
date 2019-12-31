@@ -3,7 +3,7 @@ dependencies:
   app-root-path: 3.0.0
   chokidar: 3.3.1
   file-system: 2.2.2
-  howsmydriving-utils: 0.1.111
+  howsmydriving-utils: 0.1.122
   log4js: 4.5.1
   packpath: 0.1.0
   soap: 0.30.0
@@ -1913,13 +1913,13 @@ packages:
     dev: true
     resolution:
       integrity: sha512-kssjab8CvdXfcXMXVcvsXum4Hwdq9XGtRD3TteMEvEbq0LXyiNQr6AprqKqfeaDXze7SxWvRxdpwE6ku7ikLkg==
-  /howsmydriving-twitter/0.1.76:
+  /howsmydriving-twitter/0.1.85:
     dependencies:
       app-root-dir: 1.0.2
       app-root-path: 3.0.0
       chokidar: 3.3.1
       file-system: 2.2.2
-      howsmydriving-utils: 0.1.111
+      howsmydriving-utils: 0.1.122
       log4js: 4.5.1
       packpath: 0.1.0
       soap: 0.30.0
@@ -1929,14 +1929,14 @@ packages:
     engines:
       node: 10.x
     resolution:
-      integrity: sha512-4msA1+Mnm29D+l9TKTPxgKerTdJnh5B9unNF24GKvWu+HUbIX3/9Hd5chTObBtVD3n8uN+cB7Qa5VzuAp7heoA==
-  /howsmydriving-utils/0.1.111:
+      integrity: sha512-W6tGEHL5XpGkluQGMcjYpsEITUFG8nFZK4zWj6POzgotSnRveXKECdGvM/1JoCZ8D2kePPFtbJzFnQN1YiI0Gw==
+  /howsmydriving-utils/0.1.122:
     dependencies:
       '@types/node': 12.12.22
       '@types/uuid': 3.4.6
       chokidar: 3.3.1
       find-port-free-sync: 1.0.1
-      howsmydriving-twitter: 0.1.76
+      howsmydriving-twitter: 0.1.85
       log4js: 6.1.0
       merge2: 1.3.0
       packpath: 0.1.0
@@ -1944,7 +1944,7 @@ packages:
     engines:
       node: 11.15.0
     resolution:
-      integrity: sha512-ihRZDXyy24qBqKesE09vBu7roSAB9xtETOv5m2gaNClKpKo1OpD/oZvj2shK/7s5CMUwC506/RddeXh9vqGiAQ==
+      integrity: sha512-ILIWc4+dFp9LZxvdVZY4QBM4IISReCv8ae0KrUCsQId2FUQM/TIkdwAbNW3SXxOzx1xVw5Gu0bbKa/4g37tqQA==
   /http-errors/1.7.3:
     dependencies:
       depd: 1.1.2
@@ -4631,7 +4631,7 @@ specifiers:
   gulp-mocha: ^7.0.2
   gulp-prettier: ^2.3.0
   gulp-typescript: ^6.0.0-alpha.1
-  howsmydriving-utils: ^0.1.111
+  howsmydriving-utils: ^0.1.122
   log4js: ^4.0.2
   merge2: ^1.3.0
   mocha: ^6.2.2
