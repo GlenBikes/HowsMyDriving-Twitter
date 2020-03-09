@@ -186,6 +186,12 @@ export function SendTweets(
   orig_tweet: ITweet,
   tweet_strings: Array<string>
 ): Promise<number> {
+  log.trace(
+    `SendTweets: region: ${region_name}, orig_tweet: ${DumpObject(
+      orig_tweet
+    )}, tweet_strings: ${DumpObject(tweet_strings)}`
+  );
+
   return sendTweetsInternal(
     new Twit(config.twitter),
     region_name,
@@ -200,6 +206,12 @@ function sendTweetsInternal(
   orig_tweet: ITweet,
   tweet_strings: Array<string>
 ): Promise<number> {
+  log.trace(
+    `sendTweetsInternal: region: ${region_name}, orig_tweet: ${DumpObject(
+      orig_tweet
+    )}, tweet_strings (${tweet_strings.length}): ${DumpObject(tweet_strings)}`
+  );
+
   if (tweet_strings.length == 0) {
     // return an promise that is already resolved, ending the recursive
     // chain of promises that have been built.
@@ -215,7 +227,12 @@ function sendTweetsInternal(
   // But when replying to our own replies, we should not include our own mention
   // or else those tweets will show up in the timelines of everyone who
   // follows the bot.
-  if (!IsMe(orig_tweet.user.id_str)) {
+  if (
+    orig_tweet &&
+    orig_tweet.user &&
+    orig_tweet.user.id_str &&
+    !IsMe(orig_tweet.user.id_str)
+  ) {
     tweet_string = '@' + orig_tweet.user.screen_name + ' ' + tweet_string;
   }
 
@@ -229,7 +246,9 @@ function sendTweetsInternal(
     let tweets_sent: number = 0;
 
     log.debug(
-      `Replying to tweet '${orig_tweet.id_str}': ${tweet_string.trunc(100)}.`
+      `Replying to tweet '${
+        orig_tweet ? orig_tweet.id_str : 'none'
+      }': ${tweet_string.trunc(100)}.`
     );
 
     // There will be one thread running this for each request we are
@@ -237,12 +256,16 @@ function sendTweetsInternal(
     // succession or Twitter will tag them as spam and they won't
     // render i the thread of resposes.
     // So wait at least INTER_TWEET_DELAY_MS ms between posts.
+    let params: Twit.Params = {
+      status: tweet_string
+    };
+
+    if (orig_tweet) {
+      params['in_reply_to_status_id'] = orig_tweet.id_str;
+    }
     new Twit(config.twitter).post(
       'statuses/update',
-      {
-        status: tweet_string,
-        in_reply_to_status_id: orig_tweet.id_str
-      } as Twit.Params,
+      params,
       (err: Error, data: ITweet) => {
         let twit_error_code: number = 0;
 
@@ -262,7 +285,7 @@ function sendTweetsInternal(
             // reply in our reply thread), then fail here because we can retry again
             // later and it should eventually succeed once the last tweet gets old
             // enough that Twitter no longer treats this as a duplicate.
-            if (!IsMe(orig_tweet.id_str)) {
+            if (!orig_tweet || !IsMe(orig_tweet.id_str)) {
               log.info(
                 `Returning DuplicateError to indicate this is retryable.`
               );
@@ -298,7 +321,7 @@ function sendTweetsInternal(
           tweets_sent++;
           log.debug(
             `Sent tweet for region ${region_name} in response to id_str: ${
-              orig_tweet.id_str
+              orig_tweet ? orig_tweet.id_str : 'none'
             }: ${PrintTweet(data)}`
           );
         }
@@ -413,9 +436,11 @@ function getAccount(T: Twit): Promise<Twit.Twitter.User> {
 }
 
 function IsMe(id_str: string): boolean {
+  log.trace(`IsMe: CompareNumeriStrings: ${id_str} and ${bot_info.id_str}`);
+
   let ret: boolean = CompareNumericStrings(id_str, bot_info.id_str) == 0;
   let result = ret ? 'It is me.' : 'It is not me.';
-  log.info(
+  log.trace(
     `Checking if it is me: '${id_str}' '${bot_info.id_str}'...${result}`
   );
 
