@@ -7,8 +7,9 @@ var assert = require('assert'),
 
 describe('Tweet handling', function() {
   describe('Handle tweet with reference', function() {
-    it('should assert truth', () => {
+    it('should assert truth', done => {
       assert(true);
+      done();
     });
   });
 });
