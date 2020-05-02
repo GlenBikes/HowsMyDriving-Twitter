@@ -11,6 +11,18 @@ export class MediaItem implements IMediaItem {
     this.twitter_media_id_str = media_item.twitter_media_id_str;
   }
 
+  static MediaItemsFromString(str: string): Array<IMediaItem> {
+    let media_items: Array<MediaItem> = undefined;
+
+    try {
+      media_items = JSON.parse(str) as Array<IMediaItem>;
+    } catch (err) {
+      throw new Error(`Invalid media string '${str}': ${err}`);
+    }
+
+    return media_items;
+  }
+
   url: string;
   alt_text: string;
   twitter_media_id_str: string;

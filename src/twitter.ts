@@ -15,15 +15,12 @@ import {
   MediaItemsFromString,
   PrintTweet,
   IRegion,
-  sleep
-} from 'howsmydriving-utils';
-
-import {
-  IGetTweetsResponse,
-  IMediaUploadResponse,
+  sleep,
   ITweet,
   ITwitterUser
-} from './interfaces';
+} from 'howsmydriving-utils';
+
+import { IGetTweetsResponse, IMediaUploadResponse } from './interfaces/twitter';
 
 // legacy commonjs modules
 const { DownloaderHelper } = require('node-downloader-helper');

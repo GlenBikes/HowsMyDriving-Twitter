@@ -7,12 +7,14 @@ import { __MODULE_NAME__, __MODULE_VERSION__ } from './src/logging';
 export {
   IGetTweetsResponse,
   IImageDetails,
-  IMediaUploadResponse,
-  ITweet,
-  ITwitterUser
-} from './src/interfaces';
+  IMediaUploadResponse
+} from './src/interfaces/twitter';
 
-export { IMediaItem, MediaItem, MediaItemsFromString } from './src/mediaitem';
+export {
+  IMediaItem,
+  MediaItem,
+  MediaItemsFromString
+} from './src/interfaces/mediaitem';
 
 export { getBotUser } from './src/twitter';
 export { GetNewTweets } from './src/twitter';
