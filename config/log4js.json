@@ -41,7 +41,7 @@
     "result-filter": {
       "type": "logLevelFilter",
       "appender": "result",
-      "level": "debug",
+      "level": "info",
       "maxLevel": "fatal"
     },
     "error": {
@@ -76,7 +76,7 @@
     }
   },
   "categories": {
-    "default": { "appenders": ["stdout", "default"], "level": "debug" },
+    "default": { "appenders": ["stdout", "default"], "level": "info" },
     "debug": { "appenders": ["debug", "debug-filter"], "level": "debug" },
     "result": {
       "appenders": ["stdout", "result-filter", "error-filter"],
