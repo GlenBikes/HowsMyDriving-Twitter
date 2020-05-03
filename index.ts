@@ -1,18 +1,26 @@
 const packpath = require('packpath');
 
 import * as path from 'path';
-export { ITweet } from './src/interfaces';
-export { ITwitterUser } from './src/interfaces';
-export { IGetTweetsResponse } from './src/interfaces';
+import { log } from './src/logging';
+import { __MODULE_NAME__, __MODULE_VERSION__ } from './src/logging';
 
+export {
+  IGetTweetsResponse,
+  IImageDetails,
+  IMediaUploadResponse
+} from './src/interfaces/twitter';
+
+export {
+  IMediaItem,
+  MediaItem,
+  MediaItemsFromString
+} from './src/interfaces/mediaitem';
+
+export { getBotUser } from './src/twitter';
 export { GetNewTweets } from './src/twitter';
 export { GetNewDMs } from './src/twitter';
 export { GetTweetById } from './src/twitter';
-export { SendTweets } from './src/twitter';
-
-import { log } from './src/logging';
-
-import { __MODULE_NAME__, __MODULE_VERSION__ } from './src/logging';
+export { SendTweets, UploadMedia } from './src/twitter';
 
 log.info(
   `howsmydriving-twitter: Loading module ${__MODULE_NAME__} version ${__MODULE_VERSION__}.`

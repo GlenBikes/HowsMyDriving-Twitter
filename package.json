@@ -1,6 +1,6 @@
 {
   "name": "howsmydriving-twitter",
-  "version": "0.1.86",
+  "version": "0.1.131",
   "description": "Twitter abstraction for @HowsMyDrivingWA.",
   "main": "dist/index.js",
   "types": "definitions/index.d.ts",
@@ -12,11 +12,14 @@
     "app-root-path": "^3.0.0",
     "chokidar": "^3.3.0",
     "file-system": "^2.2.2",
-    "howsmydriving-utils": "^0.1.122",
+    "howsmydriving-utils": "^0.1.194",
     "log4js": "^4.0.2",
-    "soap": "^0.30.0",
+    "mime": "^2.4.4",
+    "node-downloader-helper": "^1.0.12",
     "packpath": "^0.1.0",
-    "twit": "^2.1.0",
+    "soap": "^0.30.0",
+    "temp": "^0.9.1",
+    "twit": "^2.2.11",
     "uuid": "^3.3.3"
   },
   "devDependencies": {
@@ -43,8 +46,8 @@
     "node": "10.x"
   },
   "scripts": {
-    "build": "gulp build && gulp pretty_check",
-    "start": "gulp build && node dist/index.js",
+    "build": "gulp build && gulp pretty_check && gulp test",
+    "start": "gulp build && gulp test && node dist/index.js",
     "test": "gulp test",
     "copyconfigfiles": "gulp copyconfigfiles"
   },

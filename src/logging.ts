@@ -19,7 +19,6 @@ if (!fs.existsSync(package_json_path)) {
   }
 }
 
-console.log(`howsmydriving-twitter: Loading ${package_json_path}.`);
 var pjson = require(package_json_path);
 
 // Put this at very top so other modules can import it without taking
