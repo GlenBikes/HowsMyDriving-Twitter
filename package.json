@@ -13,7 +13,7 @@
     "chokidar": "^3.3.0",
     "file-system": "^2.2.2",
     "howsmydriving-utils": "^0.1.194",
-    "log4js": "^4.0.2",
+    "log4js": "^6.4.0",
     "mime": "^2.4.4",
     "node-downloader-helper": "^1.0.12",
     "packpath": "^0.1.0",
